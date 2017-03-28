@@ -11,21 +11,21 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-
-import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.InetAddress;
+import java.io.*;
+import java.net.*;
 import java.security.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import android.os.AsyncTask;
 
 public class MainActivity extends AppCompatActivity
 {
     //TODO: Add image request, add multiple doors
-    private static final String hostname = "134.117.59.123"; //TODO: external ip address of the pi or internal if we doing it thru the local network
+    private String hostName = "local";
+    private InetAddress hostAddress;
+    //TODO: external ip address of the pi or internal if we doing it thru the local network
     private static final int portnumber = 1400;
     private static final String debugString = "debug";
     public byte housenumber = 0x00;
@@ -48,6 +48,13 @@ public class MainActivity extends AppCompatActivity
     @Override
     protected void onCreate(Bundle savedInstanceState)
     {
+        CreateAddress addressGetter = new CreateAddress();
+        try {
+            hostAddress = addressGetter.execute(hostName).get();
+        } catch(Exception e){
+            e.printStackTrace();
+        }
+        System.out.println("Finished previous hickup");
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         currentDoorState = true;
@@ -63,7 +70,7 @@ public class MainActivity extends AppCompatActivity
             //Connecting
             eventArrayList.add(0, (getCurrentTimeStamp() + "App Launched."));
             Log.i(debugString, "Attempting to connect  to server");
-            socket = new DatagramSocket(portnumber, InetAddress.getByName(hostname));
+            socket = new DatagramSocket();
             Log.i(debugString, "Connection established");
 
             //initialize text view with doorstatus
@@ -97,7 +104,7 @@ public class MainActivity extends AppCompatActivity
                 DatagramPacket receivePacket;
                 receivePacket = new DatagramPacket(recMsg, recMsg.length);
                 try {
-                    sendPacket = new DatagramPacket(sendMsg, sendMsg.length, finalSocket.getRemoteSocketAddress());
+                    sendPacket = new DatagramPacket(sendMsg, sendMsg.length, hostAddress, portnumber);
                     finalSocket.send(sendPacket);
                     finalSocket.receive(receivePacket);
                     byte[] receiveMsg = receivePacket.getData();
@@ -108,13 +115,14 @@ public class MainActivity extends AppCompatActivity
                     adapter.notifyDataSetChanged();
                 } catch (Exception e) {
                     e.printStackTrace();
-//                    int doorNum = doornumber;
-//                    eventArrayList.add(0, (getCurrentTimeStamp() + eventString.replace("doornum", Integer.toString(doorNum)))+ ((currentDoorState) ? "unlocked." : "locked."));
-//                    adapter.notifyDataSetChanged();
+                    int doorNum = doornumber;
+                    eventArrayList.add(0, (getCurrentTimeStamp() + eventString.replace("doornum", Integer.toString(doorNum)))+ ((currentDoorState) ? "unlocked." : "locked."));
+                    adapter.notifyDataSetChanged();
                 }
 
-        }
+            }
         });
+
 
     }
 
@@ -130,7 +138,7 @@ public class MainActivity extends AppCompatActivity
         receivePacket = new DatagramPacket(recMsg, recMsg.length);
 
         try {
-            sendPacket = new DatagramPacket(sendMsg, sendMsg.length, socket.getRemoteSocketAddress());
+            sendPacket = new DatagramPacket(sendMsg, sendMsg.length, hostAddress, portnumber);
             socket.send(sendPacket);
             socket.receive(receivePacket);
         } catch (Exception e) {
@@ -179,7 +187,7 @@ public class MainActivity extends AppCompatActivity
             receivePacket = new DatagramPacket(recMsg, recMsg.length);
             try {
                 while(true) {
-                    sendPacket = new DatagramPacket(sendMsg, sendMsg.length, socket.getRemoteSocketAddress());
+                    sendPacket = new DatagramPacket(sendMsg, sendMsg.length, hostAddress, portnumber);
                     socket.send(sendPacket);
                     socket.receive(receivePacket);
                     //TODO: Add short delay to remove asynchronicity
@@ -202,6 +210,27 @@ public class MainActivity extends AppCompatActivity
             } catch (Exception e) {
                 e.printStackTrace();
             }
+        }
+    };
+
+
+    /**
+     * Created by brendanlucas on 2017-03-27.
+     */
+    private class CreateAddress extends AsyncTask<String, Void, InetAddress>{
+
+        private Exception e;
+
+        @Override
+        protected InetAddress doInBackground(String... params) {
+            try{
+                if (params[0].equals("local")) {
+                    return InetAddress.getLocalHost();
+                }else return InetAddress.getByName(params[0]);
+            } catch(UnknownHostException e) {
+                e.printStackTrace();
+            }
+            return null;
         }
     }
 }
